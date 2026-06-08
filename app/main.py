@@ -7,6 +7,18 @@ from app.api.confirm_sale import (
 from app.api.queries import (
     router as query_router
 )
+from app.api.payments import (
+    router as payments_router
+)
+from app.api.installments import (
+    router as installments_router
+)
+from app.api.cancel_sale import (
+    router as cancel_sale_router
+)
+from app.api.sales import (
+    router as sales_router
+)
 from app.database.base import Base
 from app.database.session import engine
 
@@ -25,6 +37,10 @@ Base.metadata.create_all(
 app.include_router(parse_router)
 app.include_router(confirm_sale_router)
 app.include_router(query_router)
+app.include_router(payments_router)
+app.include_router(installments_router)
+app.include_router(cancel_sale_router)
+app.include_router(sales_router)
 
 @app.get("/")
 def health():

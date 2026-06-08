@@ -4,6 +4,7 @@ from sqlalchemy import DateTime
 from sqlalchemy import Float
 from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
+from sqlalchemy import String
 
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -33,6 +34,11 @@ class Profit(Base):
 
     profit: Mapped[float] = mapped_column(
         Float
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="ACTIVE"
     )
 
     created_at: Mapped[datetime] = mapped_column(
