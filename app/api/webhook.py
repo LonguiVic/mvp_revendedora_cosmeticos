@@ -1,3 +1,4 @@
+import requests
 from fastapi import APIRouter
 from fastapi import Depends
 
@@ -13,11 +14,72 @@ from app.services.message_processor import (
 from app.services.pending_confirmation_service import (
     PendingConfirmationService
 )
+from app.services.sale_confirmation_service import SaleConfirmationService
+from app.models.pending_confirmation import PendingConfirmation
+from app.config.settings import settings
 
 router = APIRouter()
 pending_service = (
     PendingConfirmationService()
 )
+
+def enviar_mensagem_whatsapp(numero_destino: str, texto: str):
+    url = "http://localhost:8081/message/sendText/revendedora-jheni"
+    
+    payload = {
+        "number": numero_destino,
+        "text": texto
+    }
+    
+    headers = {
+        "apikey": settings.evolution_api_key, 
+        "Authorization": f"Bearer {settings.evolution_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+    except Exception as e:
+        print(f"Erro ao enviar mensagem para {numero_destino}: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+             print(e.response.text)
+
+
+def enviar_confirmacao_whatsapp(numero_destino: str, pending_id: int, sale):
+    url = "http://localhost:8081/message/sendText/revendedora-jheni"
+    
+    marca = sale.marca.value if hasattr(sale.marca, 'value') else sale.marca
+    
+    texto_venda = (
+        f"✅ *Venda Identificada!*\n\n"
+        f"👤 *Cliente:* {sale.cliente}\n"
+        f"📦 *Produto:* {sale.quantidade}x {sale.produto} ({marca})\n"
+        f"💰 *Valor:* R$ {sale.valor_total:.2f}\n"
+        f"📉 *Custo:* R$ {sale.custo_total:.2f}\n\n"
+        f"Confirma o registro do pedido #{pending_id}?\n"
+        f"Responda *SIM* ou *NÃO*"
+    )
+
+    payload = {
+        "number": numero_destino,
+        "text": texto_venda
+    }
+
+    headers = {
+        "apikey": settings.evolution_api_key, 
+        "Authorization": f"Bearer {settings.evolution_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        print("Mensagem de confirmação enviada com sucesso!")
+    except Exception as e:
+        print(f"Erro ao enviar confirmação: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+             print(e.response.text)
 
 
 @router.post("/webhook/whatsapp")
@@ -44,6 +106,55 @@ async def whatsapp_webhook(
         texto_mensagem = message_data["extendedTextMessage"].get("text")
 
     if not texto_mensagem:
+        return {"success": True}
+    
+    texto_limpo = texto_mensagem.strip().upper()
+
+    if texto_limpo in ["SIM", "NAO", "NÃO"]:
+        
+        pending = db.query(PendingConfirmation).filter(
+            PendingConfirmation.customer_phone == remote_jid,
+            PendingConfirmation.confirmed == False
+        ).order_by(PendingConfirmation.created_at.desc()).first()
+
+        if not pending:
+            enviar_mensagem_whatsapp(
+                numero_destino=remote_jid, 
+                texto="⚠️ Não encontrei nenhuma venda pendente para confirmar no momento."
+            )
+            return {"success": True}
+
+        if texto_limpo == "SIM":
+            try:
+                confirmation_service = SaleConfirmationService()
+                sale = confirmation_service.confirm(
+                    db=db, 
+                    confirmation_id=pending.id
+                )
+                
+                msg_sucesso = (
+                    f"🎉 *Venda Registrada com Sucesso!*\n\n"
+                    f"🔖 *Código:* {sale.sale_code}\n"
+                    f"As parcelas e o lucro já foram calculados e salvos no banco de dados."
+                )
+                enviar_mensagem_whatsapp(numero_destino=remote_jid, texto=msg_sucesso)
+                print(f"✅ Venda {sale.sale_code} confirmada no banco!")
+                
+            except Exception as e:
+                print(f"Erro ao confirmar venda no banco: {e}")
+                enviar_mensagem_whatsapp(
+                    numero_destino=remote_jid, 
+                    texto="❌ Ocorreu um erro interno ao salvar a venda."
+                )
+                
+        else:
+            db.delete(pending)
+            db.commit()
+            enviar_mensagem_whatsapp(
+                numero_destino=remote_jid, 
+                texto="Venda cancelada. Os dados foram descartados."
+            )
+
         return {"success": True}
 
     message = WhatsappMessage(
@@ -80,6 +191,12 @@ async def whatsapp_webhook(
                 sale.model_dump()
             )
 
+            enviar_confirmacao_whatsapp(
+                numero_destino=remote_jid, 
+                pending_id=pending.id, 
+                sale=sale
+            )
+
         else:
 
             print(
@@ -87,9 +204,12 @@ async def whatsapp_webhook(
             )
 
     except Exception as e:
-
-        print(
-            f"Erro ao processar mensagem: {e}"
+        print(f"Erro ao processar mensagem: {e}")
+        
+        mensagem_erro = (f"Erro ao processar mensagem: {e}")
+        enviar_mensagem_whatsapp(
+            numero_destino=remote_jid,
+            texto=mensagem_erro
         )
 
 

@@ -1,4 +1,5 @@
 from google import genai
+import time
 
 from app.config.settings import settings
 from app.schemas.sale_extraction import SaleExtraction
@@ -16,17 +17,35 @@ class GeminiService:
         text: str
     ) -> SaleExtraction:
 
-        response = self.client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=f"""
+        max_tentativas = 3
+
+        for tentativa in range(max_tentativas):
+            try:
+                response = self.client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=f"""
 Extraia os dados da venda:
 
 {text}
 """,
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": SaleExtraction,
-            },
-        )
+                    config={
+                        "response_mime_type": "application/json",
+                        "response_schema": SaleExtraction,
+                    },
+                )
 
-        return response.parsed
+                return response.parsed
+
+            except Exception as e:
+                erro_str = str(e)
+                
+                if "503" in erro_str or "UNAVAILABLE" in erro_str:
+                    if tentativa < max_tentativas - 1:
+                        tempo_espera = 2 ** tentativa 
+                        print(f"API do Google ocupada. Retentando em {tempo_espera}s...")
+                        time.sleep(tempo_espera)
+                    else:
+                        print("Falha no Google após múltiplas tentativas.")
+                        raise e
+                else:
+                    raise e

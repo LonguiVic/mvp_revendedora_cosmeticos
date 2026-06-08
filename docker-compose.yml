@@ -9,7 +9,7 @@ services:
       - "8081:8080"
     environment:
       - SERVER_URL=http://localhost:8081
-      - AUTHENTICATION_API_KEY={AUTHENTICATION_API_KEY}
+      - AUTHENTICATION_API_KEY=EVOLUTION_API_KEY
       # Configurações do Banco e Cache
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=postgresql://user:pass@postgres:5432/evolution?schema=public

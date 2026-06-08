@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     database_url: str
     google_sheet_id: str
     google_credentials_path: str
+    evolution_api_key: str
 
     model_config = SettingsConfigDict(
         env_file=".env",
