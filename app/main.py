@@ -31,6 +31,7 @@ from app.models.sale import Sale
 from app.models.installment import Installment
 from app.models.profit import Profit
 from app.models.audit import Audit
+from app.models.whatsapp_message import WhatsappMessage
 
 app = FastAPI()
 
