@@ -103,18 +103,19 @@ class QueryService:
 
         rows = (
             db.query(
-                Profit.revenue,
-                Profit.cost,
-                Profit.profit
+                Sale.sale_value,
+                Sale.cost_value,
+                Sale.profit_value
             )
             .filter(
+                Sale.status == "ACTIVE",
                 func.strftime(
                     "%m",
-                    Profit.created_at
+                    Sale.created_at
                 ) == f"{month:02d}",
                 func.strftime(
                     "%Y",
-                    Profit.created_at
+                    Sale.created_at
                 ) == str(year)
             )
             .all()
