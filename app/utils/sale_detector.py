@@ -13,7 +13,11 @@ SALE_HINTS = [
     "oboticario",
     "o boticário",
     "produto",
-    "pagou"
+    "pagou",
+    "venda",
+    "cancelar",
+    "pagou",
+    "parcela"
 ]
 
 

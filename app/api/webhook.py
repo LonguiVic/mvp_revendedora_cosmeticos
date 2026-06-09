@@ -104,9 +104,7 @@ async def whatsapp_webhook(
     key = data.get("key", {})
     remote_jid = key.get("remoteJid", "")
 
-    GRUPO_VENDAS_ID = "120363163180636909@g.us"
-
-    if remote_jid != GRUPO_VENDAS_ID:
+    if remote_jid != settings.grupo_vendas_id:
         return {"success": True}
 
     message_data = data.get("message", {})
