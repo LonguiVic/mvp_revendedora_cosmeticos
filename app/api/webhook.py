@@ -1,4 +1,5 @@
 import requests
+import logging
 from fastapi import APIRouter
 from fastapi import Depends
 
@@ -17,6 +18,15 @@ from app.services.pending_confirmation_service import (
 from app.services.sale_confirmation_service import SaleConfirmationService
 from app.models.pending_confirmation import PendingConfirmation
 from app.config.settings import settings
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+file_handler = logging.FileHandler("app.log")
+file_handler.setLevel(logging.ERROR)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 router = APIRouter()
 pending_service = (
@@ -41,9 +51,9 @@ def enviar_mensagem_whatsapp(numero_destino: str, texto: str):
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
     except Exception as e:
-        print(f"Erro ao enviar mensagem para {numero_destino}: {e}")
+        logger.error(f"Erro ao enviar mensagem para {numero_destino}: {e}")
         if hasattr(e, 'response') and e.response is not None:
-             print(e.response.text)
+             logger.error(e.response.text)
 
 
 def enviar_confirmacao_whatsapp(numero_destino: str, pending_id: int, sale):
@@ -75,11 +85,11 @@ def enviar_confirmacao_whatsapp(numero_destino: str, pending_id: int, sale):
     try:
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
-        print("Mensagem de confirmação enviada com sucesso!")
+        logger.info("Mensagem de confirmação enviada com sucesso!")
     except Exception as e:
-        print(f"Erro ao enviar confirmação: {e}")
+        logger.error(f"Erro ao enviar confirmação: {e}")
         if hasattr(e, 'response') and e.response is not None:
-             print(e.response.text)
+             logger.error(e.response.text)
 
 
 @router.post("/webhook/whatsapp")
@@ -138,10 +148,10 @@ async def whatsapp_webhook(
                     f"As parcelas e o lucro já foram calculados e salvos no banco de dados."
                 )
                 enviar_mensagem_whatsapp(numero_destino=remote_jid, texto=msg_sucesso)
-                print(f"✅ Venda {sale.sale_code} confirmada no banco!")
+                logger.info(f"Venda {sale.sale_code} confirmada no banco!")
                 
             except Exception as e:
-                print(f"Erro ao confirmar venda no banco: {e}")
+                logger.error(f"Erro ao confirmar venda no banco: {e}")
                 enviar_mensagem_whatsapp(
                     numero_destino=remote_jid, 
                     texto="❌ Ocorreu um erro interno ao salvar a venda."
@@ -183,11 +193,11 @@ async def whatsapp_webhook(
                 )
             )
 
-            print(
+            logger.info(
                 f"VENDA IDENTIFICADA - Confirmation ID: {pending.id}"
             )
 
-            print(
+            logger.info(
                 sale.model_dump()
             )
 
@@ -199,12 +209,12 @@ async def whatsapp_webhook(
 
         else:
 
-            print(
+            logger.warning(
                 "Mensagem comum."
             )
 
     except Exception as e:
-        print(f"Erro ao processar mensagem: {e}")
+        logger.error(f"Erro ao processar mensagem: {e}")
         
         mensagem_erro = (f"Erro ao processar mensagem: {e}")
         enviar_mensagem_whatsapp(
@@ -213,9 +223,9 @@ async def whatsapp_webhook(
         )
 
 
-    print("=" * 80)
-    print(f"Cliente: {remote_jid}")
-    print(f"Mensagem: {texto_mensagem}")
-    print("=" * 80)
+    logger.info("=" * 80)
+    logger.info(f"Cliente: {remote_jid}")
+    logger.info(f"Mensagem: {texto_mensagem}")
+    logger.info("=" * 80)
 
     return {"success": True}

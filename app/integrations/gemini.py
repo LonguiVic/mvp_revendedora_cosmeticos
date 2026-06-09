@@ -1,8 +1,17 @@
 from google import genai
 import time
-
+import logging
 from app.config.settings import settings
 from app.schemas.sale_extraction import SaleExtraction
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+file_handler = logging.FileHandler("app.log")
+file_handler.setLevel(logging.ERROR)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
 class GeminiService:
@@ -42,10 +51,10 @@ Extraia os dados da venda:
                 if "503" in erro_str or "UNAVAILABLE" in erro_str:
                     if tentativa < max_tentativas - 1:
                         tempo_espera = 2 ** tentativa 
-                        print(f"API do Google ocupada. Retentando em {tempo_espera}s...")
+                        logger.warning(f"API do Google ocupada. Retentando em {tempo_espera}s...")
                         time.sleep(tempo_espera)
                     else:
-                        print("Falha no Google após múltiplas tentativas.")
+                        logger.error("Falha no Google após múltiplas tentativas.")
                         raise e
                 else:
                     raise e
