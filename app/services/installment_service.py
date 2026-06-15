@@ -15,8 +15,7 @@ class InstallmentService:
         query = (
             db.query(
                 Installment,
-                Sale.customer_name,
-                Sale.product
+                Sale
             )
             .join(
                 Sale,
@@ -39,8 +38,8 @@ class InstallmentService:
             {
                 "installment_id": installment.id,
                 "sale_id": installment.sale_id,
-                "cliente": customer_name,
-                "produto": product,
+                "cliente": sale.customer_name,
+                "produto": ", ".join([i.product for i in sale.items]),
                 "parcela": (
                     f"{installment.installment_number}/"
                     f"{installment.total_installments}"
@@ -55,5 +54,5 @@ class InstallmentService:
                     else None
                 )
             }
-            for installment, customer_name, product in rows
+            for installment, sale in rows
         ]

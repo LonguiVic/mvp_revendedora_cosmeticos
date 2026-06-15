@@ -6,7 +6,7 @@ from app.models.audit import Audit
 from app.models.installment import Installment
 from app.models.pending_confirmation import PendingConfirmation
 from app.models.profit import Profit
-from app.models.sale import Sale
+from app.models.sale import Sale, SaleItemModel
 
 
 class SaleConfirmationService:
@@ -43,14 +43,20 @@ class SaleConfirmationService:
             sale_code=f"VEN-{datetime.now().strftime('%Y%m%d')}-{pending.id}",
             customer_name=payload["cliente"],
             phone=payload["telefone"],
-            brand=payload["marca"],
-            product=payload["produto"],
-            quantity=payload["quantidade"],
             sale_value=payload["valor_total"],
             cost_value=payload["custo_total"],
             profit_value=profit_value,
             installments=payload["quantidade_parcelas"]
         )
+
+        for item_data in payload.get("itens", []):
+            marca = item_data["marca"]["value"] if isinstance(item_data["marca"], dict) else item_data["marca"]
+            item = SaleItemModel(
+                product=item_data["produto"],
+                brand=marca,
+                quantity=item_data["quantidade"]
+            )
+            sale.items.append(item)
 
         db.add(sale)
 

@@ -195,4 +195,6 @@ pyrightconfig.json
 # Credentials
 app/credentials/
 
+CONTEXTO.md
+
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode

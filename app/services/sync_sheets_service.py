@@ -1,351 +1,131 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from datetime import datetime
 
-from app.integrations.google_sheets import (
-    GoogleSheetsService
-)
-
+from app.integrations.google_sheets import GoogleSheetsService
 from app.models.sale import Sale
 from app.models.installment import Installment
 from app.models.profit import Profit
+from app.models.audit import Audit
 
+MONTH_NAMES = {
+    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
+    5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
+    9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+}
 
 class SyncSheetsService:
 
-    def sync(
-        self,
-        db: Session
-    ):
-
+    def sync(self, db: Session):
         sheets = GoogleSheetsService()
+        self.sync_monthly_tabs(db, sheets)
+        self.sync_profits(db, sheets)
+        self.sync_audits(db, sheets)
 
-        self.sync_sales(
-            db,
-            sheets
-        )
+    def sync_monthly_tabs(self, db: Session, sheets: GoogleSheetsService):
+        for month_num, month_name in MONTH_NAMES.items():
+            installments = (
+                db.query(Installment, Sale)
+                .join(Sale, Installment.sale_id == Sale.id)
+                .filter(Installment.due_month == month_num)
+                .order_by(Installment.due_year, Installment.installment_number)
+                .all()
+            )
 
-        self.sync_installments(
-            db,
-            sheets
-        )
-
-        self.sync_profits(
-            db,
-            sheets
-        )
-
-        self.sync_receivables(
-            db,
-            sheets
-        )
-
-        self.sync_dashboard(
-            db,
-            sheets
-        )
-
-    def sync_sales(
-        self,
-        db,
-        sheets
-    ):
-
-        sales = (
-            db.query(Sale)
-            .all()
-        )
-
-        rows = [
-            [
-                "sale_id",
-                "sale_code",
-                "cliente",
-                "produto",
-                "valor",
-                "lucro",
-                "status"
-            ]
-        ]
-
-        for sale in sales:
-
-            rows.append(
+            rows = [
                 [
-                    sale.id,
+                    "ID da venda", "Data da venda", "Nome do cliente", "Telefone", "Marca",
+                    "Produto", "Valor total da venda", "Número da parcela",
+                    "Quantidade total de parcelas", "Valor da parcela",
+                    "Status do pagamento", "Data do pagamento", "Observações",
+                    "Último lembrete enviado", "Cobrança automática habilitada"
+                ]
+            ]
+
+            for inst, sale in installments:
+                payment_date = inst.payment_date.strftime("%d/%m/%Y") if inst.payment_date else ""
+                
+                products_str = ", ".join([f"{i.quantity}x {i.product}" for i in sale.items])
+                brands_str = ", ".join(list(set([i.brand for i in sale.items])))
+
+                rows.append([
                     sale.sale_code,
+                    sale.sale_date.strftime("%d/%m/%Y"),
                     sale.customer_name,
-                    sale.product,
-                    sale.sale_value,
-                    sale.profit_value,
-                    sale.status
-                ]
-            )
+                    sale.phone or "",
+                    brands_str,
+                    products_str,
+                    float(sale.sale_value),
+                    inst.installment_number,
+                    inst.total_installments,
+                    float(inst.amount),
+                    inst.status,
+                    payment_date,
+                    "", # Observações
+                    "", # Último lembrete enviado
+                    "Sim" # Cobrança automática habilitada
+                ])
 
-        sheets.replace_sheet_data(
-            "sales",
-            rows
-        )
+            # Sync even if empty so the sheet is created
+            sheets.replace_sheet_data(month_name, rows)
+            sheets.format_sheet(month_name)
 
-        sheets.format_sheet(
-            "sales"
-        )
-
-    def sync_installments(
-        self,
-        db,
-        sheets
-    ):
-
-        installments = (
-            db.query(Installment)
-            .all()
-        )
-
-        rows = [
-            [
-                "id",
-                "sale_id",
-                "numero",
-                "total",
-                "valor",
-                "mes",
-                "ano",
-                "status"
-            ]
-        ]
-
-        for i in installments:
-
-            rows.append(
-                [
-                    i.id,
-                    i.sale_id,
-                    i.installment_number,
-                    i.total_installments,
-                    i.amount,
-                    i.due_month,
-                    i.due_year,
-                    i.status
-                ]
-            )
-
-        sheets.replace_sheet_data(
-            "installments",
-            rows
-        )
-
-        sheets.format_sheet(
-            "installments"
-        )
-
-    def sync_profits(
-        self,
-        db,
-        sheets
-    ):
-
+    def sync_profits(self, db: Session, sheets: GoogleSheetsService):
         profits = (
-            db.query(Profit)
-            .join(
-                Sale,
-                Sale.id == Profit.sale_id
-            )
-            .filter(
-                Sale.status == "ACTIVE"
-            )
+            db.query(Profit, Sale)
+            .join(Sale, Profit.sale_id == Sale.id)
+            .order_by(Profit.created_at)
             .all()
         )
 
         rows = [
             [
-                "sale_id",
-                "receita",
-                "custo",
-                "lucro"
+                "ID da venda", "Data", "Cliente", "Marca", "Produto",
+                "Receita", "Custo", "Lucro", "Status"
             ]
         ]
 
-        for p in profits:
+        for profit, sale in profits:
+            products_str = ", ".join([f"{i.quantity}x {i.product}" for i in sale.items])
+            brands_str = ", ".join(list(set([i.brand for i in sale.items])))
 
-            rows.append(
-                [
-                    p.sale_id,
-                    p.revenue,
-                    p.cost,
-                    p.profit
-                ]
-            )
+            rows.append([
+                sale.sale_code,
+                sale.sale_date.strftime("%d/%m/%Y"),
+                sale.customer_name,
+                brands_str,
+                products_str,
+                float(profit.revenue),
+                float(profit.cost),
+                float(profit.profit),
+                profit.status
+            ])
 
-        sheets.replace_sheet_data(
-            "profits",
-            rows
-        )
+        sheets.replace_sheet_data("Lucros", rows)
+        sheets.format_sheet("Lucros")
 
-        sheets.format_sheet(
-            "profits"
-        )
-
-    def sync_receivables(
-        self,
-        db,
-        sheets
-    ):
-        rows_db = (
-            db.query(
-                Installment.due_month,
-                Installment.due_year,
-                func.sum(
-                    Installment.amount
-                )
-            )
-            .filter(
-                Installment.status == "PENDING"
-            )
-            .group_by(
-                Installment.due_month,
-                Installment.due_year
-            )
-            .order_by(
-                Installment.due_year,
-                Installment.due_month
-            )
-            .all()
-        )
-
+    def sync_audits(self, db: Session, sheets: GoogleSheetsService):
+        audits = db.query(Audit).order_by(Audit.created_at).all()
+        
         rows = [
             [
-                "mes",
-                "ano",
-                "valor_a_receber"
+                "Data", "Hora", "Tipo de evento", "ID da venda",
+                "Usuário", "Observações"
             ]
         ]
 
-        for row in rows_db:
+        for audit in audits:
+            sale = db.query(Sale).filter(Sale.id == audit.sale_id).first()
+            sale_code = sale.sale_code if sale else str(audit.sale_id)
 
-            rows.append(
-                [
-                    row.due_month,
-                    row.due_year,
-                    float(row[2])
-                ]
-            )
+            rows.append([
+                audit.created_at.strftime("%d/%m/%Y"),
+                audit.created_at.strftime("%H:%M:%S"),
+                audit.event_type,
+                sale_code,
+                "Sistema",
+                audit.description
+            ])
 
-        sheets.replace_sheet_data(
-            "receivables",
-            rows
-        )
-
-        sheets.format_sheet(
-            "receivables"
-        )
-
-    def sync_dashboard(
-        self,
-        db,
-        sheets
-    ):
-
-        total_sales = (
-            db.query(Sale)
-            .filter(
-                Sale.status == "ACTIVE"
-            )
-            .count()
-        )
-
-        revenue = (
-            db.query(
-                func.sum(
-                    Sale.sale_value
-                )
-            )
-            .filter(
-                Sale.status == "ACTIVE"
-            )
-            .scalar()
-            or 0
-        )
-
-        cost = (
-            db.query(
-                func.sum(
-                    Sale.cost_value
-                )
-            )
-            .filter(
-                Sale.status == "ACTIVE"
-            )
-            .scalar()
-            or 0
-        )
-
-        profit = (
-            db.query(
-                func.sum(
-                    Sale.profit_value
-                )
-            )
-            .filter(
-                Sale.status == "ACTIVE"
-            )
-            .scalar()
-            or 0
-        )
-
-        pending_installments = (
-            db.query(
-                Installment
-            )
-            .filter(
-                Installment.status == "PENDING"
-            )
-            .count()
-        )
-
-        receivables = (
-            db.query(
-                func.sum(
-                    Installment.amount
-                )
-            )
-            .filter(
-                Installment.status == "PENDING"
-            )
-            .scalar()
-            or 0
-        )
-
-        debtors = (
-            db.query(
-                Sale.customer_name
-            )
-            .join(
-                Installment,
-                Sale.id == Installment.sale_id
-            )
-            .filter(
-                Installment.status == "PENDING"
-            )
-            .distinct()
-            .count()
-        )
-
-        rows = [
-            ["Métrica", "Valor"],
-            ["Total de vendas", total_sales],
-            ["Receita total", float(revenue)],
-            ["Custo total", float(cost)],
-            ["Lucro total", float(profit)],
-            ["Parcelas pendentes", pending_installments],
-            ["Valor a receber", float(receivables)],
-            ["Clientes devedores", debtors]
-        ]
-
-        sheets.replace_sheet_data(
-            "dashboard",
-            rows
-        )
-
-        sheets.format_sheet(
-            "dashboard"
-        )
+        sheets.replace_sheet_data("Auditoria", rows)
+        sheets.format_sheet("Auditoria")

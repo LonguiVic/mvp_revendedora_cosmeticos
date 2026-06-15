@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.models.sale import Sale
 from app.models.installment import Installment
@@ -10,7 +11,9 @@ class SaleService:
         self,
         db: Session,
         status: str | None = None,
-        customer_name: str | None = None
+        customer_name: str | None = None,
+        month: int | None = None,
+        forma_pagamento: str | None = None
     ):
 
         query = db.query(Sale)
@@ -28,6 +31,17 @@ class SaleService:
                     f"%{customer_name}%"
                 )
             )
+
+        if month:
+            query = query.filter(
+                func.cast(func.strftime("%m", Sale.created_at), func.Integer) == month
+            )
+
+        if forma_pagamento:
+            if forma_pagamento.lower() == "avista":
+                query = query.filter(Sale.installments == 1)
+            elif forma_pagamento.lower() == "parcelado":
+                query = query.filter(Sale.installments > 1)
 
         sales = query.order_by(Sale.created_at.desc()).all()
 
@@ -65,9 +79,7 @@ class SaleService:
                 "sale_code": sale.sale_code,
                 "cliente": sale.customer_name,
                 "telefone": sale.phone,
-                "marca": sale.brand,
-                "produto": sale.product,
-                "quantidade": sale.quantity,
+                "itens": [{"produto": i.product, "marca": i.brand, "quantidade": i.quantity} for i in sale.items],
                 "valor_venda": sale.sale_value,
                 "custo": sale.cost_value,
                 "lucro": sale.profit_value,

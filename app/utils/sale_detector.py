@@ -36,13 +36,14 @@ def is_valid_sale(sale) -> bool:
     if not sale.cliente:
         return False
 
-    if not sale.produto:
+    if not sale.itens or len(sale.itens) == 0:
         return False
 
     if sale.valor_total <= 0:
         return False
 
-    if sale.quantidade <= 0:
-        return False
+    for item in sale.itens:
+        if not item.produto or item.quantidade <= 0:
+            return False
 
     return True

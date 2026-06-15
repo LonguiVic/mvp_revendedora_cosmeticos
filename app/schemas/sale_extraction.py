@@ -1,12 +1,10 @@
 from enum import Enum
-
 from pydantic import BaseModel
-
+from typing import List
 
 class FormaPagamento(str, Enum):
     AVISTA = "avista"
     PARCELADO = "parcelado"
-
 
 class Marca(str, Enum):
     AVON = "Avon"
@@ -17,13 +15,15 @@ class Marca(str, Enum):
     QUEM_DISSE_BERENICE = "Quem Disse, Berenice?"
     OUI = "Oui"
 
+class SaleItem(BaseModel):
+    produto: str
+    marca: Marca
+    quantidade: int
 
 class SaleExtraction(BaseModel):
     cliente: str
     telefone: str | None = None
-    produto: str
-    marca: Marca
-    quantidade: int
+    itens: List[SaleItem]
     valor_total: float
     forma_pagamento: FormaPagamento
     quantidade_parcelas: int
