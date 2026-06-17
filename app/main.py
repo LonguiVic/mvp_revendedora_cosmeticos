@@ -27,17 +27,19 @@ scheduler = BackgroundScheduler()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     scheduler.add_job(send_monthly_reminder, 'cron', day=1, hour=9, minute=0)
     scheduler.add_job(send_auto_charges, 'cron', day=5, hour=10, minute=0)
     scheduler.start()
+    
     yield
+    
     scheduler.shutdown()
 
 app = FastAPI(lifespan=lifespan)
 
-Base.metadata.create_all(
-    bind=engine
-)
 
 app.include_router(parse_router)
 app.include_router(confirm_sale_router)

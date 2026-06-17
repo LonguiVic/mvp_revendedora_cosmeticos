@@ -10,3 +10,4 @@ aiosqlite
 google-genai
 gspread
 google-auth
+APScheduler
